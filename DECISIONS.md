@@ -48,3 +48,23 @@ safely, so I'd have had to write extra logic myself to fake it, and
 that extra logic is exactly where bugs like the original race condition 
 creep back in. Redis just handles both the lock and the counter 
 natively without me needing to trust my own code to get the timing right.
+
+WHY I USED KAFKA-PYTHON-NG
+
+First i tried confluent-kafka because that's what everyone uses for kafka 
+in python. but install failed on windows, it needs to compile some c code 
+and my system didnt have a windows sdk file called io.h. could have fixed 
+it but that meant installing more visual studio stuff just for this, felt 
+like too much for now.
+
+then tried kafka-python which is pure python so no compiling needed. this 
+installed fine but broke when i actually ran it. turned out this library 
+is old and not updated properly, it has some broken internal six library 
+which doesnt work with python 3.13 which is what i have.
+
+finally used kafka-python-ng, it's basically the same library but someone 
+else maintained and fixed it for newer python. same code worked instantly 
+after switching to this one.
+
+so yeah took 3 tries to get one working kafka library lol but now it 
+actually sends events properly to my kafka topic.
