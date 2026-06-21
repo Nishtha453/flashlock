@@ -6,7 +6,9 @@ from kafka import KafkaProducer
 
 producer = KafkaProducer(
     bootstrap_servers='localhost:9092',
-    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+    batch_size=32768,
+    linger_ms=0
 )
 
 TOPIC = 'inventory-events'
@@ -37,5 +39,27 @@ def main():
     producer.flush()
     print("Done.")
 
+def throughput_test(num_events=5000):
+    """Sends a burst of events as fast as possible, measures real throughput."""
+    print(f"Sending {num_events} events as fast as possible...")
+    start_time = time.time()
+
+    for i in range(num_events):
+        event = generate_event()
+        producer.send(
+            TOPIC,
+            key=event["sku"].encode('utf-8'),
+            value=event
+        )
+
+    producer.flush()  
+    end_time = time.time()
+
+    duration = end_time - start_time
+    rate = num_events / duration
+
+    print(f"\nSent {num_events} events in {duration:.2f} seconds")
+    print(f"Throughput: {rate:.0f} events/sec")
+
 if __name__ == "__main__":
-    main()
+    throughput_test(5000)

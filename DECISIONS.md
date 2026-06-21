@@ -68,3 +68,19 @@ after switching to this one.
 
 so yeah took 3 tries to get one working kafka library lol but now it 
 actually sends events properly to my kafka topic.
+
+PRODUCER THROUGHPUT TUNING
+
+Tested 3 configs sending 5000 events each:
+- default settings: 10528 events/sec
+- bigger batch (32kb) + linger 10ms: 9629 events/sec (got slower!)
+- bigger batch (32kb) + linger 0ms: 13393 events/sec (best)
+
+turns out linger.ms actually made things worse here. makes sense once i 
+thought about it - my producer sends events so fast that batches were 
+already filling up instantly, so telling kafka to "wait a bit to fill 
+the batch" just added pure delay with nothing to gain. linger only helps 
+if events trickle in slower than the wait window, not in a tight burst 
+like my throughput test.
+
+keeping batch_size=32768, linger_ms=0 as final producer config.
