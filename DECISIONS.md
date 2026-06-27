@@ -84,3 +84,20 @@ if events trickle in slower than the wait window, not in a tight burst
 like my throughput test.
 
 keeping batch_size=32768, linger_ms=0 as final producer config.
+
+KAFKA DUAL LISTENERS (host + docker)
+
+problem: my producer runs on windows host, consumer runs inside docker. 
+when kafka advertised itself as just "kafka:9092", the consumer could 
+connect but my host producer couldn't - "kafka" hostname doesn't exist 
+outside docker. when it advertised "localhost:9092", host worked but 
+the in-docker consumer broke. couldn't make both work with one listener.
+
+fix: two listeners on different ports. INTERNAL://kafka:9092 for 
+containers, EXTERNAL://localhost:29092 for my host producer. same kafka, 
+two doors. producer connects on 29092, consumer on 9092, both reach the 
+same broker.
+
+took a while to figure out the symptom - producer said "Sent" but 
+consumer never got anything and stock never dropped, because delivery 
+was silently failing to a hostname the host couldn't resolve.
