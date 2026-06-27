@@ -5,7 +5,7 @@ import random
 from kafka import KafkaProducer
 
 producer = KafkaProducer(
-    bootstrap_servers='localhost:9092',
+    bootstrap_servers='localhost:29092',
     value_serializer=lambda v: json.dumps(v).encode('utf-8'),
     batch_size=32768,
     linger_ms=0
@@ -62,4 +62,4 @@ def throughput_test(num_events=5000):
     print(f"Throughput: {rate:.0f} events/sec")
 
 if __name__ == "__main__":
-    throughput_test(5000)
+    main()
