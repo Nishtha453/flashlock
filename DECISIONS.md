@@ -101,3 +101,21 @@ same broker.
 took a while to figure out the symptom - producer said "Sent" but 
 consumer never got anything and stock never dropped, because delivery 
 was silently failing to a hostname the host couldn't resolve.
+
+PORT COLLISION - TWO POSTGRES FIGHTING
+
+spent way too long on a "password authentication failed" error 
+connecting to postgres from my host script. credentials were 100% 
+correct, even reset the whole volume twice. turned out i had a native 
+postgres installed on windows ages ago, running as a service, sitting 
+on port 5432 - the SAME port my docker postgres mapped to. my python 
+script connected to 127.0.0.1:5432 and hit the windows postgres 
+(different password) instead of my container.
+
+found it with Get-NetTCPConnection - showed TWO processes on 5432: 
+com.docker.backend AND postgres. 
+
+fix: mapped docker postgres to 5433 on the host instead (5433:5432). 
+host scripts connect on 5433, containers still use 5432 internally. 
+lesson: when auth fails but creds are definitely right, check WHAT is 
+actually answering on that port.
