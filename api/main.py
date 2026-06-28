@@ -1,4 +1,6 @@
+import os
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import redis
 from psycopg2 import pool
@@ -6,30 +8,44 @@ import uuid
 
 app = FastAPI(title="FlashLock API")
 
-from fastapi.middleware.cors import CORSMiddleware
+ALLOWED_ORIGINS = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173"
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
+REDIS_TLS = os.environ.get("REDIS_TLS", "false").lower() == "true"
 
-redis_pool = redis.ConnectionPool(
-    host='127.0.0.1', port=6379, decode_responses=True,
-    max_connections=50
+redis_kwargs = dict(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    decode_responses=True,
+    max_connections=50,
 )
+if REDIS_PASSWORD:
+    redis_kwargs["password"] = REDIS_PASSWORD
+if REDIS_TLS:
+    redis_kwargs["connection_class"] = redis.SSLConnection
+
+redis_pool = redis.ConnectionPool(**redis_kwargs)
 r = redis.Redis(connection_pool=redis_pool)
-
-pg_pool = pool.SimpleConnectionPool(
-    minconn=1,
-    maxconn=20,
-    host='127.0.0.1',
-    port=5433,
-    dbname='flashlock_db',
-    user='flashlock',
-    password='flashlock_dev'
-)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    pg_pool = pool.SimpleConnectionPool(1, 20, dsn=DATABASE_URL)
+else:
+    pg_pool = pool.SimpleConnectionPool(
+        1, 20,
+        host="127.0.0.1", port=5433,
+        dbname="flashlock_db", user="flashlock", password="flashlock_dev",
+    )
 
 class CartAddRequest(BaseModel):
     sku: str
