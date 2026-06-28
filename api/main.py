@@ -8,10 +8,7 @@ import uuid
 
 app = FastAPI(title="FlashLock API")
 
-ALLOWED_ORIGINS = os.environ.get(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173"
-).split(",")
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,17 +16,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
 REDIS_TLS = os.environ.get("REDIS_TLS", "false").lower() == "true"
 
-redis_kwargs = dict(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    decode_responses=True,
-    max_connections=50,
-)
+redis_kwargs = dict(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True, max_connections=50)
 if REDIS_PASSWORD:
     redis_kwargs["password"] = REDIS_PASSWORD
 if REDIS_TLS:
@@ -37,6 +30,7 @@ if REDIS_TLS:
 
 redis_pool = redis.ConnectionPool(**redis_kwargs)
 r = redis.Redis(connection_pool=redis_pool)
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     pg_pool = pool.SimpleConnectionPool(1, 20, dsn=DATABASE_URL)
@@ -55,12 +49,6 @@ class SaleStartRequest(BaseModel):
     sku: str
     stock: int
 
-def acquire_lock(sku, timeout=5):
-    return r.set(f"lock:{sku}", "locked", nx=True, ex=timeout)
-
-def release_lock(sku):
-    r.delete(f"lock:{sku}")
-
 @app.get("/inventory/{sku}")
 def get_inventory(sku: str):
     stock = r.hget(f"inventory:{sku}", "stock")
@@ -75,12 +63,14 @@ def add_to_cart(req: CartAddRequest):
 
     if r.hget(f"inventory:{sku}", "stock") is None:
         raise HTTPException(status_code=404, detail="SKU not found")
+
     new_stock = r.hincrby(f"inventory:{sku}", "stock", -1)
     if new_stock < 0:
         r.hincrby(f"inventory:{sku}", "stock", 1)
         status = "rejected"
     else:
         status = "sold"
+
     event_id = f"evt_{uuid.uuid4().hex[:8]}"
     if status == "sold":
         conn = pg_pool.getconn()
@@ -88,7 +78,7 @@ def add_to_cart(req: CartAddRequest):
             cur = conn.cursor()
             cur.execute(
                 "INSERT INTO events (event_id, sku, user_id, status) VALUES (%s, %s, %s, %s)",
-                (event_id, sku, user_id, status)
+                (event_id, sku, user_id, status),
             )
             conn.commit()
             cur.close()
@@ -112,18 +102,12 @@ def get_oversells():
         for row in rows
     ]}
 
-@app.post("/cart/add")
-def add_to_cart(req: CartAddRequest):
-    sku = req.sku
+@app.post("/sale/start")
+def start_sale(req: SaleStartRequest):
+    r.hset(f"inventory:{req.sku}", "stock", req.stock)
+    return {"sku": req.sku, "stock": req.stock, "message": "Sale started"}
 
-    if r.hget(f"inventory:{sku}", "stock") is None:
-        raise HTTPException(status_code=404, detail="SKU not found")
-
-    new_stock = r.hincrby(f"inventory:{sku}", "stock", -1)
-    if new_stock < 0:
-        r.hincrby(f"inventory:{sku}", "stock", 1)
-        status = "rejected"
-    else:
-        status = "sold"
-
-    return {"sku": sku, "status": status}
+@app.post("/sale/reset")
+def reset_sale(req: SaleStartRequest):
+    r.hset(f"inventory:{req.sku}", "stock", req.stock)
+    return {"sku": req.sku, "stock": req.stock, "message": "Sale reset"}
