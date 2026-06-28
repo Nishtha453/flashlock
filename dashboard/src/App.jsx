@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "https://flashlock.onrender.com";
 const SKU = "iphone15";
 
 const C = {
