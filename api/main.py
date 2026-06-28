@@ -57,17 +57,18 @@ def add_to_cart(req: CartAddRequest):
     else:
         status = "sold"
     event_id = f"evt_{uuid.uuid4().hex[:8]}"
-    conn = pg_pool.getconn()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO events (event_id, sku, user_id, status) VALUES (%s, %s, %s, %s)",
-            (event_id, sku, user_id, status)
-        )
-        conn.commit()
-        cur.close()
-    finally:
-        pg_pool.putconn(conn)
+    if status == "sold":
+        conn = pg_pool.getconn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO events (event_id, sku, user_id, status) VALUES (%s, %s, %s, %s)",
+                (event_id, sku, user_id, status)
+            )
+            conn.commit()
+            cur.close()
+        finally:
+            pg_pool.putconn(conn)
 
     return {"event_id": event_id, "sku": sku, "status": status}
 
@@ -86,12 +87,18 @@ def get_oversells():
         for row in rows
     ]}
 
-@app.post("/sale/start")
-def start_sale(req: SaleStartRequest):
-    r.hset(f"inventory:{req.sku}", "stock", req.stock)
-    return {"sku": req.sku, "stock": req.stock, "message": "Sale started"}
+@app.post("/cart/add")
+def add_to_cart(req: CartAddRequest):
+    sku = req.sku
 
-@app.post("/sale/reset")
-def reset_sale(req: SaleStartRequest):
-    r.hset(f"inventory:{req.sku}", "stock", req.stock)
-    return {"sku": req.sku, "stock": req.stock, "message": "Sale reset"}
+    if r.hget(f"inventory:{sku}", "stock") is None:
+        raise HTTPException(status_code=404, detail="SKU not found")
+
+    new_stock = r.hincrby(f"inventory:{sku}", "stock", -1)
+    if new_stock < 0:
+        r.hincrby(f"inventory:{sku}", "stock", 1)
+        status = "rejected"
+    else:
+        status = "sold"
+
+    return {"sku": sku, "status": status}
