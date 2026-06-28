@@ -6,6 +6,15 @@ import uuid
 
 app = FastAPI(title="FlashLock API")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 redis_pool = redis.ConnectionPool(
     host='127.0.0.1', port=6379, decode_responses=True,
     max_connections=50
